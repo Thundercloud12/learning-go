@@ -85,7 +85,7 @@ func (J *App) processJob(
 	jobId string,
 	
 ) {
-	J.store.mu.Lock()
+	
 	job, ok := J.store.Get(jobId)
 	if !ok {
 		log.Printf("Job not found soraha hun")
@@ -94,7 +94,7 @@ func (J *App) processJob(
 
 	job.Status = InProgress
 	J.store.SaveJob(job)
-	J.store.mu.Unlock()
+	
 
 	log.Printf("Zesty job running")
 
