@@ -1,15 +1,38 @@
 package main
 
-templ landing(){
+import "url-short/internal/database"
+
+templ landing(links []database.Url) {
 
     <div>
         <h1>Submit a new website</h1>
+
         <form action="/submit" method="POST">
             <label for="url">Website URL:</label>
             <input type="text" id="url" name="url">
             <input type="submit" value="Submit">
         </form>
+
+        <h2>Saved Links</h2>
+
+        <table border="1">
+            <tr>
+                <th>Short ID</th>
+                <th>Original URL</th>
+            </tr>
+
+            for _, link := range links {
+                <tr>
+                    <td>
+                        <a href={"/" + link.ConvertedUrl}>
+                            { link.ConvertedUrl }
+                        </a>
+                    </td>
+                    <td>
+                        { link.OriginalUrl }
+                    </td>
+                </tr>
+            }
+        </table>
     </div>
-    
-		
 }

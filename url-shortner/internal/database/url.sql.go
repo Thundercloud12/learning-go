@@ -7,6 +7,8 @@ package database
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createMapping = `-- name: CreateMapping :exec
@@ -15,7 +17,7 @@ VALUES ($1, $2, $3)
 `
 
 type CreateMappingParams struct {
-	ID           string
+	ID           uuid.UUID
 	OriginalUrl  string
 	ConvertedUrl string
 }
@@ -23,6 +25,33 @@ type CreateMappingParams struct {
 func (q *Queries) CreateMapping(ctx context.Context, arg CreateMappingParams) error {
 	_, err := q.db.ExecContext(ctx, createMapping, arg.ID, arg.OriginalUrl, arg.ConvertedUrl)
 	return err
+}
+
+const getAllMappings = `-- name: GetAllMappings :many
+SELECT id, original_url, converted_url FROM url
+`
+
+func (q *Queries) GetAllMappings(ctx context.Context) ([]Url, error) {
+	rows, err := q.db.QueryContext(ctx, getAllMappings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Url
+	for rows.Next() {
+		var i Url
+		if err := rows.Scan(&i.ID, &i.OriginalUrl, &i.ConvertedUrl); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getConverted = `-- name: GetConverted :one

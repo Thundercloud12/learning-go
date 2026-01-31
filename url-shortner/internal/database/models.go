@@ -4,8 +4,12 @@
 
 package database
 
+import (
+	"github.com/google/uuid"
+)
+
 type Url struct {
-	ID           string
+	ID           uuid.UUID
 	OriginalUrl  string
 	ConvertedUrl string
 }

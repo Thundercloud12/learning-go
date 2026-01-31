@@ -11,19 +11,19 @@ import (
 	"url-short/internal/database"
 
 	"github.com/a-h/templ"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	_ "github.com/lib/pq"
+
 )
 
 type Link struct {
-	ID  string
+	ID  uuid.UUID
 	URL string
 }
 
-var LinkMap = map[string]*Link{
-	"example": {ID: "example", URL: "https://example.com"},
-}
 
 type apiconfig struct{
 	DB *database.Queries
@@ -57,7 +57,18 @@ func (apiconfig *apiconfig)SubmitHandler(c *echo.Context) error {
 
 	id := generateRandomString(8)
 
-	LinkMap[id] = &Link{ID: id, URL: url}
+	// LinkMap[id] = &Link{ID: id, URL: url}
+
+	err:= apiconfig.DB.CreateMapping(c.Request().Context(),database.CreateMappingParams{
+		ID: uuid.New(),
+		OriginalUrl: url,
+		ConvertedUrl: id,
+	})
+
+	if err!=nil{
+		
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
 
 	return c.Redirect(http.StatusSeeOther, "/")
 }
@@ -69,23 +80,40 @@ func (apiconfig *apiconfig)RedirectHandler(c *echo.Context) error {
 		return c.String(http.StatusBadRequest, "ID missing")
 	}
 
-	link, found := LinkMap[id]
-	if !found {
-		return c.String(http.StatusNotFound, "Aee jasti shanpati nako karu")
+	link, err:= apiconfig.DB.GetConverted(c.Request().Context(),id)
+	if err!=nil{
+		
+		return c.String(http.StatusInternalServerError, "Correct link pathav")
 	}
 
-	return c.Redirect(http.StatusMovedPermanently, link.URL)
+	return c.Redirect(http.StatusMovedPermanently, link.OriginalUrl)
+}
+
+func (apiconfig *apiconfig)HomeHandler() echo.HandlerFunc {
+
+	  return func(c *echo.Context) error {
+		links,err:= apiconfig.DB.GetAllMappings(c.Request().Context())
+
+		if err != nil{
+			return c.String(500,err.Error())
+		}
+
+		component:=landing(links)
+
+		return echo.WrapHandler(templ.Handler(component))(c)
+	  }
+	
 }
 
 func main() {
 
 
 	godotenv.Load(".env")
-	portString:=os.Getenv("PORT")
+	// portString:=os.Getenv("PORT")
 
-	if portString==""{
-		log.Fatal("PORT not found in the environment")
-	}
+	// if portString==""{
+	// 	log.Fatal("PORT not found in the environment")
+	// }
 
 	DBString:= os.Getenv("DB_URL")
 
@@ -110,10 +138,10 @@ func main() {
 	// Logging middleware
 	e.Use(middleware.RequestLogger())
 
-	component := landing()
+	
 
 	// Home page (templ)
-	e.GET("/", echo.WrapHandler(templ.Handler(component)))
+	e.GET("/", apiCfg.HomeHandler())
 
 	// Submit short link
 	e.POST("/submit", apiCfg.SubmitHandler)

@@ -4,3 +4,6 @@ VALUES ($1, $2, $3);
 
 -- name: GetConverted :one
 SELECT * FROM url WHERE converted_url = $1;
+
+-- name: GetAllMappings :many
+SELECT * FROM url;
