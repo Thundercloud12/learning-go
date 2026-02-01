@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	_ "github.com/lib/pq"
+	"strings"
 
 )
 
@@ -23,7 +24,6 @@ type Link struct {
 	ID  uuid.UUID
 	URL string
 }
-
 
 type apiconfig struct{
 	DB *database.Queries
@@ -43,31 +43,37 @@ func generateRandomString(length int) string {
 	return string(result)
 }
 
-func (apiconfig *apiconfig)SubmitHandler(c *echo.Context) error {
+func (apiconfig *apiconfig) SubmitHandler(c *echo.Context) error {
 	url := c.FormValue("url")
 
 	if url == "" {
-		return c.String(http.StatusBadRequest, "Link khaali ka pathavtoys re")
+		return c.String(http.StatusBadRequest, "URL is required")
 	}
 
-	// Add https:// if missing
-	if !(len(url) >= 4 && (url[:4] == "http" || url[:5] == "https")) {
+	// Normalize URL BEFORE DB check
+	if !(strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://")) {
 		url = "https://" + url
+	}
+
+	exists, err := apiconfig.DB.ExistsUrl(c.Request().Context(), url)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Database error")
+	}
+
+	if exists {
+		return c.String(http.StatusConflict, "Link already exists")
 	}
 
 	id := generateRandomString(8)
 
-	// LinkMap[id] = &Link{ID: id, URL: url}
-
-	err:= apiconfig.DB.CreateMapping(c.Request().Context(),database.CreateMappingParams{
-		ID: uuid.New(),
-		OriginalUrl: url,
+	err = apiconfig.DB.CreateMapping(c.Request().Context(), database.CreateMappingParams{
+		ID:           uuid.New(),
+		OriginalUrl:  url,
 		ConvertedUrl: id,
 	})
 
-	if err!=nil{
-		
-		return c.String(http.StatusInternalServerError, err.Error())
+	if err != nil {
+		return c.String(http.StatusInternalServerError, "Failed to save link")
 	}
 
 	return c.Redirect(http.StatusSeeOther, "/")
@@ -80,11 +86,20 @@ func (apiconfig *apiconfig)RedirectHandler(c *echo.Context) error {
 		return c.String(http.StatusBadRequest, "ID missing")
 	}
 
+	url,found:= GetCachedUrl(id)
+	if found {
+		return c.Redirect(http.StatusMovedPermanently,url)
+	}
+
+
+
 	link, err:= apiconfig.DB.GetConverted(c.Request().Context(),id)
 	if err!=nil{
 		
 		return c.String(http.StatusInternalServerError, "Correct link pathav")
 	}
+
+	setCachedUrl(id,link.OriginalUrl)
 
 	return c.Redirect(http.StatusMovedPermanently, link.OriginalUrl)
 }
@@ -125,6 +140,10 @@ func main() {
 	if err !=nil{
 		fmt.Printf("Error aagaya %v",err)
 	}
+
+	conn.SetMaxOpenConns(50)
+	conn.SetMaxIdleConns(25)
+	conn.SetConnMaxLifetime(time.Minute*5)
 	db:=database.New(conn)
 
 	apiCfg:=apiconfig{

@@ -27,6 +27,21 @@ func (q *Queries) CreateMapping(ctx context.Context, arg CreateMappingParams) er
 	return err
 }
 
+const existsUrl = `-- name: ExistsUrl :one
+SELECT EXISTS(
+    SELECT 1
+    FROM url
+    WHERE original_url=$1
+)AS url_exists
+`
+
+func (q *Queries) ExistsUrl(ctx context.Context, originalUrl string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, existsUrl, originalUrl)
+	var url_exists bool
+	err := row.Scan(&url_exists)
+	return url_exists, err
+}
+
 const getAllMappings = `-- name: GetAllMappings :many
 SELECT id, original_url, converted_url FROM url
 `
